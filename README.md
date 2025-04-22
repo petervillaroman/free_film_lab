@@ -1,7 +1,5 @@
-# Welcome to Remix!
-
-- 📖 [Remix docs](https://remix.run/docs)
-
+# free film lab
+- This is a WIP. This project aims to develop a free alternative to negative lab pro.
 ## Development
 
 Run the dev server:
