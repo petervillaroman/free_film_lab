@@ -1,4 +1,4 @@
-# free film lab
+# Free Film Lab
 - This is a WIP. This project aims to develop a free alternative to negative lab pro.
 ## Development
 
