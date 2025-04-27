@@ -3,7 +3,7 @@ import type { MetaFunction } from "@remix-run/node";
 import ProcessingSelector from "~/components/ProcessingSelector";
 import ToggleSwitch from "~/components/ToggleSwitch";
 import ColorDropper from "~/components/ColorDropper";
-import { processImage, type NegativeConversionOptions } from "~/utils/imageProcessing";
+import { processImage, type NegativeConversionOptions } from "~/utils/imageProcessing/index";
 
 export const meta: MetaFunction = () => {
   return [
@@ -133,7 +133,7 @@ export default function Index() {
     console.log('Selected film border color:', color);
     
     // Update the film base color in conversion options
-    setConversionOptions(prev => ({
+    setConversionOptions((prev: NegativeConversionOptions) => ({
       ...prev,
       filmBaseColor: color
     }));
@@ -155,11 +155,11 @@ export default function Index() {
         };
           
         processImage(originalImage!, processingType, options)
-          .then(processed => {
+          .then((processed: string) => {
             setProcessedImage(processed);
             setIsProcessing(false);
           })
-          .catch(error => {
+          .catch((error: Error) => {
             console.error("Processing error:", error);
             setIsProcessing(false);
           });
@@ -172,7 +172,7 @@ export default function Index() {
     value: number | { r: number; g: number; b: number } | { hue: number; saturation: number; lightness: number },
     subcategory?: string
   ) => {
-    setConversionOptions(prev => {
+    setConversionOptions((prev: NegativeConversionOptions) => {
       if (subcategory && typeof prev[category] === 'object') {
         return {
           ...prev,

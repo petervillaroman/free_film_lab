@@ -1,4 +1,4 @@
-import { processingTypes } from "~/utils/imageProcessing";
+import { processingTypes } from "app/utils/imageProcessing/types";
 
 interface ProcessingSelectorProps {
   selectedType: string;
