@@ -3,6 +3,7 @@ import type { MetaFunction } from "@remix-run/node";
 import ProcessingSelector from "~/components/ProcessingSelector";
 import ToggleSwitch from "~/components/ToggleSwitch";
 import ColorDropper from "~/components/ColorDropper";
+import ImageDisplayCard from "~/components/ImageDisplayCard";
 import { processImage, type NegativeConversionOptions } from "~/utils/imageProcessing/index";
 
 export const meta: MetaFunction = () => {
@@ -16,6 +17,7 @@ export default function Index() {
   const [originalImage, setOriginalImage] = useState<string | null>(null);
   const [processedImage, setProcessedImage] = useState<string | null>(null);
   const [processingType, setProcessingType] = useState<string>("none");
+  const [originalFilename, setOriginalFilename] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [showAdvancedControls, setShowAdvancedControls] = useState<boolean>(false);
   const [useBorderSampling, setUseBorderSampling] = useState<boolean>(false);
@@ -29,6 +31,12 @@ export default function Index() {
     cyanAdjustment: { hue: 10, saturation: 0.8, lightness: 0.1 }
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Use alternative approach for client-side features
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [downloadElapsed, setDownloadElapsed] = useState(0);
+  const [downloadStartTime, setDownloadStartTime] = useState(0);
 
   // Process the image whenever the original image, processing type, or conversion options change
   useEffect(() => {
@@ -89,6 +97,9 @@ export default function Index() {
     if (files && files.length > 0) {
       const file = files[0];
       const reader = new FileReader();
+      
+      // Save the original filename
+      setOriginalFilename(file.name);
       
       reader.onload = (e) => {
         if (e.target?.result) {
@@ -191,6 +202,96 @@ export default function Index() {
 
   const handleAdvancedControlsToggle = (checked: boolean) => {
     setShowAdvancedControls(checked);
+  };
+
+  // Use useEffect to create a manual download function for client-side
+  const downloadFile = (url: string, filename: string) => {
+    // Only run in browser environment
+    if (typeof window === 'undefined') return;
+    
+    try {
+      setIsDownloading(true);
+      setDownloadProgress(0);
+      setDownloadElapsed(0);
+      setDownloadStartTime(Date.now());
+      
+      // Create a link element
+      const link = document.createElement('a');
+      
+      // Set the link's href to the data URL
+      link.href = url;
+      
+      // Set the download attribute with the filename
+      link.download = filename;
+      
+      // Append to the body (not visible)
+      document.body.appendChild(link);
+      
+      // Simulate progress for better UX
+      const progressInterval = setInterval(() => {
+        setDownloadProgress(prev => {
+          const newProgress = prev + (100 - prev) * 0.1;
+          if (newProgress >= 99) {
+            clearInterval(progressInterval);
+            return 100;
+          }
+          return newProgress;
+        });
+        
+        setDownloadElapsed((Date.now() - downloadStartTime) / 1000);
+      }, 100);
+      
+      // Click the link to trigger the download
+      link.click();
+      
+      // Clean up
+      document.body.removeChild(link);
+      
+      // Complete the progress after a short delay
+      setTimeout(() => {
+        clearInterval(progressInterval);
+        setDownloadProgress(100);
+        
+        // Reset after download completes
+        setTimeout(() => {
+          setIsDownloading(false);
+          setDownloadProgress(0);
+        }, 1000);
+      }, 1000);
+    } catch (error) {
+      console.error("Download error:", error);
+      setIsDownloading(false);
+    }
+  };
+
+  // Generate appropriate filename for downloads
+  const generateFilename = (isProcessed: boolean): string => {
+    const now = new Date();
+    const dateString = now.toISOString().split('T')[0]; // YYYY-MM-DD format
+    
+    // Extract base filename if available, otherwise use a default
+    let baseName = 'image';
+    
+    if (originalFilename) {
+      // Remove extension and get just the filename
+      const lastDotIndex = originalFilename.lastIndexOf('.');
+      baseName = lastDotIndex > 0 
+        ? originalFilename.substring(0, lastDotIndex) 
+        : originalFilename;
+    }
+    
+    // Create filename with processing type info
+    const processingLabel = isProcessed ? processingType : 'original';
+    
+    return `${baseName}_${processingLabel}_${dateString}.jpg`;
+  };
+
+  // Handle downloads
+  const handleDownload = (imageUrl: string | null, isProcessed: boolean) => {
+    if (!imageUrl) return;
+    
+    const filename = generateFilename(isProcessed);
+    downloadFile(imageUrl, filename);
   };
 
   return (
@@ -497,6 +598,17 @@ export default function Index() {
                   </div>
                 </div>
               )}
+
+              {/* Download Status */}
+              {isDownloading && (
+                <div className="w-full bg-green-50 dark:bg-green-900 p-3 rounded-lg mt-2">
+                  <p className="text-green-700 dark:text-green-300 mb-1">Downloading: {Math.round(downloadProgress)}%</p>
+                  <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                    <div className="bg-green-600 h-2.5 rounded-full" style={{ width: `${downloadProgress}%` }}></div>
+                  </div>
+                  <p className="text-xs text-green-700 dark:text-green-300 mt-1">Elapsed time: {downloadElapsed.toFixed(1)}s</p>
+                </div>
+              )}
             </div>
             
             {/* Right side: Image Comparison */}
@@ -506,46 +618,41 @@ export default function Index() {
               </h2>
               
               <div className="flex flex-col gap-4 w-full">
-                {/* Original Image */}
-                <div className="flex-1 flex flex-col items-center">
-                  <p className="text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Original</p>
-                  <div className="w-full bg-white dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600 overflow-hidden">
-                    {isColorPickerActive ? (
-                      <ColorDropper
-                        imageUrl={originalImage}
-                        onColorSelected={handleColorSelected}
-                        isActive={isColorPickerActive}
-                        onComplete={handleColorPickerComplete}
-                      />
-                    ) : (
+                {/* Original Image using ImageDisplayCard */}
+                <ImageDisplayCard title="Original">
+                  {isColorPickerActive ? (
+                    <ColorDropper
+                      imageUrl={originalImage}
+                      onColorSelected={handleColorSelected}
+                      isActive={isColorPickerActive}
+                      onComplete={handleColorPickerComplete}
+                    />
+                  ) : (
+                    originalImage && (
                       <img 
                         src={originalImage} 
                         alt="Original uploaded" 
                         className="w-full h-auto object-contain max-h-[300px]"
                       />
-                    )}
-                  </div>
-                </div>
+                    )
+                  )}
+                </ImageDisplayCard>
                 
-                {/* Processed Image */}
+                {/* Processed Image using ImageDisplayCard */}
                 {processedImage && (
-                  <div className="flex-1 flex flex-col items-center">
-                    <p className="text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
-                      {isProcessing ? "Processing..." : "Processed Result"}
-                    </p>
-                    <div className="w-full bg-white dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600 overflow-hidden relative">
-                      {isProcessing && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30">
-                          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-                        </div>
-                      )}
-                      <img 
-                        src={processedImage} 
-                        alt="Processed result" 
-                        className="w-full h-auto object-contain max-h-[300px]"
-                      />
-                    </div>
-                  </div>
+                  <ImageDisplayCard
+                    title={isProcessing ? "Processing..." : "Processed Result"}
+                    showDownloadButton={true}
+                    onDownload={() => handleDownload(processedImage, true)}
+                    isDownloadDisabled={isProcessing || isDownloading}
+                    isLoading={isProcessing}
+                  >
+                    <img 
+                      src={processedImage} 
+                      alt="Processed result" 
+                      className="w-full h-auto object-contain max-h-[300px]"
+                    />
+                  </ImageDisplayCard>
                 )}
               </div>
             </div>
